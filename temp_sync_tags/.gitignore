@@ -1,0 +1,37 @@
+# --- Gitignore pour Alice Box ---
+
+# Dossiers de travail (Triés par l'utilisateur)
+_TESTS/
+_INUTILE/
+
+# Fichiers système et Python
+__pycache__/
+*.pyc
+Thumbs.db
+.DS_Store
+
+# Secrets
+token_git.txt
+
+# --- Ce qui est "Utile" et doit être sur Git ---
+# Tout ce qui est à la racine (Web App)
+# Le dossier media/ (Audio/Video + Config)
+# Le dossier ALICE_PI_INSTALL/ (Code et Install pour le Pi)
+
+# On s'assure que ces dossiers sont bien inclus
+!media/
+!ALICE_PI_INSTALL/
+
+# Empêcher les gros fichiers binaires par erreur s'ils traînent
+*.img.gz
+*.ctb
+*.stl
+*.img
+*.zip
+*.gz
+*.pdf
+# (Sauf si on en a besoin pour le web, mais ici on privilégie la légèreté)
+!media/**/*.mp3
+!media/**/*.mp4
+!media/**/*.wav
+!media/**/*.json

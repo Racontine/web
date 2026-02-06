@@ -117,7 +117,8 @@ async function initLibrary(token) {
 
     // 1. Fetch Ratings
     try {
-        const r = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/ratings.json`, {
+        const timestamp = new Date().getTime();
+        const r = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/ratings.json?cb=${timestamp}`, {
             headers: { 'Authorization': `Bearer ${token}`, 'If-None-Match': '' }
         });
         if (r.ok) {
