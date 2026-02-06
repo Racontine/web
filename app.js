@@ -44,6 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
         configForm.classList.toggle('hidden');
     });
 
+    const batchQRBtn = document.getElementById('batchQRBtn');
+    if (batchQRBtn) {
+        batchQRBtn.addEventListener('click', batchProcessShortUrls);
+    }
+
     /* Token Help Modal Logic */
     const helpBtn = document.getElementById('tokenHelpBtn');
     const helpModal = document.getElementById('tokenHelpModal');
@@ -514,6 +519,57 @@ function saveShortUrl(name, shortUrl) {
     if (token) pushRatings(token); // Silent background push
 }
 
+async function batchProcessShortUrls() {
+    const token = localStorage.getItem('gh_pat');
+    if (!token || availableFiles.length === 0) {
+        showToast("Configurez d'abord vos accès et chargez la bibliothèque.");
+        return;
+    }
+
+    if (!confirm(`Voulez-vous générer les liens courts pour les ${availableFiles.length} fichiers ? Cela peut prendre quelques minutes.`)) return;
+
+    let count = 0;
+    let errors = 0;
+    const total = availableFiles.length;
+
+    for (const file of availableFiles) {
+        const metadata = ratings[file.name] || {};
+        if (metadata.shortUrl && metadata.shortUrl.startsWith('http') && metadata.shortUrl.length < 50) {
+            continue; // Déjà raccourci
+        }
+
+        count++;
+        showToast(`Traitement ${count}/${total} : ${file.name}`);
+
+        try {
+            // Un petit délai pour ne pas saturer l'API de redirection
+            await new Promise(r => setTimeout(r, 500));
+
+            const rawUrl = file.url;
+            const shortenerUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`)}`;
+            const res = await fetch(shortenerUrl);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.contents && data.contents.startsWith('http')) {
+                    ratings[file.name] = {
+                        ...metadata,
+                        shortUrl: data.contents,
+                        type: metadata.type || 'Livre',
+                        score: metadata.score || 0
+                    };
+                }
+            }
+        } catch (e) {
+            console.error(`Erreur sur ${file.name}`, e);
+            errors++;
+        }
+    }
+
+    await pushRatings(token);
+    renderLibrary();
+    showToast(`Terminé ! ${count} fichiers traités, ${errors} erreurs.`);
+}
+
 /* --- AUTH & UPLOAD --- */
 async function validateToken(token) {
     if (!token) {
@@ -738,8 +794,24 @@ function showResult(url, name) {
     uploadSection.classList.add('hidden');
     resultSection.classList.remove('hidden');
     uploadedFilename.innerText = name;
-    qrContainer.innerHTML = '';
-    new QRCode(qrContainer, { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.L });
+    qrContainer.innerHTML = '<canvas id="qrCanvas"></canvas>';
+
+    const canvas = document.getElementById('qrCanvas');
+    QRCode.toCanvas(canvas, url, {
+        width: 200,
+        margin: 2,
+        color: {
+            dark: '#10002b',
+            light: '#ffffff'
+        },
+        errorCorrectionLevel: 'L' // Low pour permettre des URLs plus longues si besoin
+    }, function (error) {
+        if (error) {
+            console.error(error);
+            showToast("Erreur QR: URL trop longue ?");
+            qrContainer.innerHTML = '<div style="color:red; font-size:0.8rem;">URL trop longue pour le QR Code. Essayez de raccourcir le nom du fichier.</div>';
+        }
+    });
 
     const linkContainer = document.createElement('div');
     linkContainer.style.marginTop = '1rem';

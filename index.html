@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
-    <!-- QR Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- QR Library (Modern) -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
     <!-- LameJS for MP3 Conversion -->
     <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
     <!-- CSS -->
@@ -185,7 +185,13 @@
             <!-- RIGHT COLUMN: Library -->
             <aside class="library-panel glass-panel">
                 <div class="library-header">
-                    <h2>📚 Bibliothèque</h2>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h2>📚 Bibliothèque</h2>
+                        <button id="batchQRBtn" class="btn-secondary" style="font-size:0.75rem; padding:0.4rem 0.8rem;"
+                            title="Générer les liens courts pour tous les fichiers">
+                            ⚡ Générer tous les tags
+                        </button>
+                    </div>
                     <div class="search-bar">
                         <input type="text" id="searchInput" placeholder="Rechercher...">
                         <div class="filters-group">
