@@ -237,12 +237,16 @@ function renderLibrary() {
     const filtered = availableFiles.filter(file => {
         const metadata = ratings[file.name] || {};
         const score = typeof metadata === 'number' ? metadata : (metadata.score || 0);
-        let type = typeof metadata === 'number' ? 'Livre' : (metadata.type || 'Livre');
 
-        // Check if file is in a subfolder and override type if needed
+        // Détection automatique du type basée sur le dossier
+        let type = 'Livre';
         const parts = file.path.split('/');
-        if (parts.length > 3 && !ratings[file.name]) {
+        if (parts.length > 3) { // media/audio/NOM_DOSSIER/...
             type = parts[2];
+        } else if (typeof metadata === 'object' && metadata.type) {
+            type = metadata.type;
+        } else if (typeof metadata === 'number') {
+            type = 'Livre';
         }
 
         const matchesName = file.name.toLowerCase().includes(term);
@@ -269,7 +273,15 @@ function renderLibrary() {
 
         const metadata = ratings[file.name] || {};
         const score = typeof metadata === 'number' ? metadata : (metadata.score || 0);
-        const type = typeof metadata === 'number' ? 'Livre' : (metadata.type || 'Livre');
+
+        // Même logique de type que pour le filtre
+        let type = 'Livre';
+        const parts = file.path.split('/');
+        if (parts.length > 3) {
+            type = parts[2];
+        } else if (typeof metadata === 'object' && metadata.type) {
+            type = metadata.type;
+        }
 
         row.innerHTML = `
             <div class="item-info action-qr">
