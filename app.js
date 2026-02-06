@@ -142,7 +142,13 @@ async function initLibrary(token) {
         if (r.ok) {
             const result = await r.json();
             availableFiles = result.tree
-                .filter(item => item.type === 'blob' && (item.path.startsWith('media/audio/') || item.path.startsWith('media/video/')))
+                .filter(item => {
+                    if (item.type !== 'blob') return false;
+                    const path = item.path.toLowerCase();
+                    const isMedia = path.startsWith('media/audio/') || path.startsWith('media/video/');
+                    const isImage = path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('_qr.png');
+                    return isMedia && !isImage;
+                })
                 .map(item => ({
                     name: item.path.split('/').pop(),
                     url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,

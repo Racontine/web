@@ -116,12 +116,17 @@ def main():
         print(f"❌ Erreur connexion : {e}")
         return
 
-    media_files = [
-        item for item in tree 
-        if item["type"] == "blob" and 
-           (item["path"].startswith("media/audio/") or item["path"].startswith("media/video/"))
-    ]
-    print(f"🔍 {len(media_files)} fichiers media détectés.")
+    media_files = []
+    for item in tree:
+        path = item["path"]
+        if item["type"] == "blob" and (path.startswith("media/audio/") or path.startswith("media/video/")):
+            # Exclure les images (QR codes existants, etc.)
+            ext = os.path.splitext(path)[1].lower()
+            if ext in ['.mp3', '.wav', '.mp4', '.mkv', '.ogg', '.m4a']:
+                if not path.endswith("_qr.png"): # Sécurité supplémentaire
+                    media_files.append(item)
+    
+    print(f"🔍 {len(media_files)} fichiers media détectés (images exclues).")
 
     # 3. Génération
     updated_git = False
