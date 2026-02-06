@@ -52,14 +52,48 @@
                             <label for="repoName">Nom du Dépôt</label>
                             <input type="text" id="repoName" placeholder="Ex: commun">
 
-                            <label for="githubToken">GitHub Token (PAT)</label>
-                            <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                            <label for="githubToken">Clé de stockage :</label>
+                            <div class="token-input-wrapper">
+                                <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                                <button id="tokenHelpBtn" class="help-circle-btn" type="button"
+                                    title="Comment obtenir une clé ?">?</button>
+                            </div>
 
                             <button id="saveConfigBtn" style="width:100%; margin-top:0.5rem;">Sauvegarder
                                 Configuration</button>
                             <div id="tokenStatus" class="status-indicator" title="Statut du token"></div>
                         </div>
-                        <p class="hint">Nécessite le scope <code>repo</code> ou `public_repo`.</p>
+                        <p class="hint">Nécessite le droit <code>repo</code> ou <code>public_repo</code>.</p>
+                    </div>
+
+                    <!-- Modal Aide Token -->
+                    <div id="tokenHelpModal" class="modal hidden">
+                        <div class="modal-content glass-panel">
+                            <span class="close-modal">&times;</span>
+                            <h2>🔑 Comment créer votre Clé de stockage ?</h2>
+                            <div class="tutorial-steps">
+                                <p>Pour que l'outil puisse envoyer vos sons sur GitHub, vous avez besoin d'un "Token"
+                                    (une clé secrète).</p>
+                                <ol>
+                                    <li>Connectez-vous à votre compte <strong>GitHub</strong>.</li>
+                                    <li>Cliquez sur votre photo (en haut à droite) et allez dans
+                                        <strong>Settings</strong> (Paramètres).</li>
+                                    <li>Tout en bas du menu de gauche, cliquez sur <strong>&lt;&gt; Developer
+                                            settings</strong>.</li>
+                                    <li>Cliquez sur <strong>Personal access tokens</strong> puis sur <strong>Tokens
+                                            (classic)</strong>.</li>
+                                    <li>Cliquez sur le bouton <strong>Generate new token</strong> (puis <em>Generate new
+                                            token (classic)</em>).</li>
+                                    <li>Donnez-lui un nom (ex: "Racontine Box").</li>
+                                    <li>Cochez la case <strong>[x] repo</strong> (très important !).</li>
+                                    <li>Descendez et cliquez sur <strong>Generate token</strong>.</li>
+                                    <li><strong>⚠️ IMPORTANT :</strong> Copiez le code qui s'affiche (il commence par
+                                        <code>ghp_</code>). Vous ne pourrez plus le revoir après !</li>
+                                </ol>
+                                <p class="warning-box">Collez ensuite ce code dans le champ "Clé de stockage" de cette
+                                    interface.</p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Storage Indicator -->

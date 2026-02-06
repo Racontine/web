@@ -43,6 +43,30 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleConfigBtn.addEventListener('click', () => {
         configForm.classList.toggle('hidden');
     });
+
+    /* Token Help Modal Logic */
+    const helpBtn = document.getElementById('tokenHelpBtn');
+    const helpModal = document.getElementById('tokenHelpModal');
+    const closeBtn = document.querySelector('.close-modal');
+
+    if (helpBtn && helpModal) {
+        helpBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            helpModal.classList.remove('hidden');
+        });
+    }
+
+    if (closeBtn && helpModal) {
+        closeBtn.addEventListener('click', () => {
+            helpModal.classList.add('hidden');
+        });
+    }
+
+    window.addEventListener('click', (e) => {
+        if (e.target === helpModal) {
+            helpModal.classList.add('hidden');
+        }
+    });
 });
 
 saveConfigBtn.addEventListener('click', () => {
