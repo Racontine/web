@@ -447,7 +447,8 @@ async function generateQRFromUrl(rawUrl, name, size = 0) {
 
     // Vérifier si une URL courte existe déjà en cache
     const existing = ratings[name] || {};
-    if (typeof existing === 'object' && existing.shortUrl && (existing.shortUrl.includes('tinyurl.com') || existing.shortUrl.includes('v.gd') || existing.shortUrl.includes('is.gd'))) {
+    // On accepte toute URL http/https comme valide si elle existe
+    if (typeof existing === 'object' && existing.shortUrl && existing.shortUrl.startsWith('http')) {
         updateProgress(100, "Terminé (Cache) !");
         showResult(existing.shortUrl, name);
         return;
