@@ -44,11 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
         configForm.classList.toggle('hidden');
     });
 
-    const batchQRBtn = document.getElementById('batchQRBtn');
-    if (batchQRBtn) {
-        batchQRBtn.addEventListener('click', batchProcessShortUrls);
-    }
-
     /* Token Help Modal Logic */
     const helpBtn = document.getElementById('tokenHelpBtn');
     const helpModal = document.getElementById('tokenHelpModal');
@@ -512,53 +507,7 @@ function saveShortUrl(name, shortUrl) {
     if (token) pushRatings(token); // Silent background push
 }
 
-async function batchProcessShortUrls() {
-    const token = localStorage.getItem('gh_pat');
-    if (!token || availableFiles.length === 0) {
-        showToast("Configurez d'abord vos accès et chargez la bibliothèque.");
-        return;
-    }
 
-    if (!confirm(`Voulez-vous générer les liens courts pour les ${availableFiles.length} fichiers ? Cela peut prendre quelques minutes.`)) return;
-
-    let count = 0;
-    let errors = 0;
-    const total = availableFiles.length;
-
-    for (const file of availableFiles) {
-        const metadata = ratings[file.name] || {};
-        // Skip si déjà raccourci
-        if (metadata.shortUrl && metadata.shortUrl.startsWith('http') && metadata.shortUrl.length < 50) {
-            continue;
-        }
-
-        count++;
-        showToast(`Traitement ${count}/${total} : ${file.name}`);
-
-        try {
-            await new Promise(r => setTimeout(r, 2000)); // Pause longue (2s) pour éviter le Rate Limit
-            const short = await getShortUrl(file.url);
-
-            if (short) {
-                ratings[file.name] = {
-                    ...metadata,
-                    shortUrl: short,
-                    type: metadata.type || 'Livre',
-                    score: metadata.score || 0
-                };
-            } else {
-                errors++;
-            }
-        } catch (e) {
-            console.error(`Erreur sur ${file.name}`, e);
-            errors++;
-        }
-    }
-
-    await pushRatings(token);
-    renderLibrary();
-    showToast(`Terminé ! ${count} fichiers traités, ${errors} erreurs.`);
-}
 
 /* --- AUTH & UPLOAD --- */
 async function validateToken(token) {
