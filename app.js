@@ -304,25 +304,18 @@ if (typeFilter) typeFilter.addEventListener('change', renderLibrary);
 
 /* --- TAG DOWNLOAD --- */
 async function downloadTag(rawUrl, name) {
+    // 1. Check Metadata
     const existing = ratings[name] || {};
-    let finalUrl = (typeof existing === 'object' && existing.shortUrl && (existing.shortUrl.includes('tinyurl.com') || existing.shortUrl.includes('v.gd') || existing.shortUrl.includes('is.gd')))
-        ? existing.shortUrl
-        : rawUrl;
+    let finalUrl = (existing.shortUrl && existing.shortUrl.length < 50) ? existing.shortUrl : rawUrl;
 
+    // 2. If no short URL, try to generate one locally
     if (finalUrl === rawUrl) {
         showToast("Lien court...");
-        try {
-            const shortenerUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`)}`;
-            const shortRes = await fetch(shortenerUrl);
-            if (shortRes.ok) {
-                const data = await shortRes.json();
-                const text = data.contents;
-                if (text && text.startsWith('http')) {
-                    finalUrl = text;
-                    saveShortUrl(name, finalUrl);
-                }
-            }
-        } catch (e) { console.warn("Shortener failed"); }
+        const short = await getShortUrl(rawUrl);
+        if (short) {
+            finalUrl = short;
+            saveShortUrl(name, finalUrl);
+        }
     }
 
     // Use a temporary div to render QR
@@ -465,49 +458,47 @@ async function generateQRFromUrl(rawUrl, name, size = 0) {
         return;
     }
 
-    // Sinon, on tente de générer une URL courte avec un Timeout de 40s
+    // Sinon, on tente de générer une URL courte
     let finalUrl = rawUrl;
     updateProgress(30, "Génération lien court...");
 
-    // Promesse de raccourcissement
-    const shortenPromise = (async () => {
-        try {
-            const shortenerUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`)}`;
-            const shortRes = await fetch(shortenerUrl);
-            if (shortRes.ok) {
-                const data = await shortRes.json();
-                const text = data.contents;
-                if (text && text.startsWith('http')) {
-                    return text;
-                }
-            }
-        } catch (e) {
-            console.warn("Shortener failed or too slow");
-        }
-        return null; // Échec
-    })();
-
-    // Promesse de Timeout (40 secondes)
-    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), 40000));
-
-    // Course : Le premier qui finit gagne
-    const result = await Promise.race([shortenPromise, timeoutPromise]);
-
-    if (result === 'TIMEOUT') {
-        showToast("Délai dépassé (>40s) : Utilisation URL standard ⚠️");
-        console.log("Timeout shortener: Fallback to raw URL");
-        finalUrl = rawUrl;
-    } else if (result) {
-        finalUrl = result;
+    const short = await getShortUrl(rawUrl);
+    if (short) {
+        finalUrl = short;
         saveShortUrl(name, finalUrl);
         showToast("Lien raccourci généré ! ✨");
+        updateProgress(100, "Terminé !");
     } else {
-        // Échec technique du shortener
-        finalUrl = rawUrl;
+        showToast("Échec raccourcisseur : URL standard utilisée ⚠️");
+        updateProgress(100, "Terminé (Standard)");
     }
 
-    updateProgress(100, "Terminé !");
     showResult(finalUrl, name);
+}
+
+// Fonction centrale pour raccourcir les URLs avec Fallback
+async function getShortUrl(rawUrl) {
+    // 1. Essai via CorsProxy.io + TinyURL
+    try {
+        const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`);
+        if (res.ok) {
+            const text = await res.text();
+            if (text.startsWith('http')) return text;
+        }
+    } catch (e) { console.warn("CorsProxy failed, trying fallback...", e); }
+
+    // 2. Fallback via AllOrigins
+    try {
+        const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(target)}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.contents && data.contents.startsWith('http')) return data.contents;
+        }
+    } catch (e) { console.warn("AllOrigins failed", e); }
+
+    return null;
 }
 
 function saveShortUrl(name, shortUrl) {
@@ -534,30 +525,27 @@ async function batchProcessShortUrls() {
 
     for (const file of availableFiles) {
         const metadata = ratings[file.name] || {};
+        // Skip si déjà raccourci
         if (metadata.shortUrl && metadata.shortUrl.startsWith('http') && metadata.shortUrl.length < 50) {
-            continue; // Déjà raccourci
+            continue;
         }
 
         count++;
         showToast(`Traitement ${count}/${total} : ${file.name}`);
 
         try {
-            // Un petit délai pour ne pas saturer l'API de redirection
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, 800)); // Pause
+            const short = await getShortUrl(file.url);
 
-            const rawUrl = file.url;
-            const shortenerUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`)}`;
-            const res = await fetch(shortenerUrl);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.contents && data.contents.startsWith('http')) {
-                    ratings[file.name] = {
-                        ...metadata,
-                        shortUrl: data.contents,
-                        type: metadata.type || 'Livre',
-                        score: metadata.score || 0
-                    };
-                }
+            if (short) {
+                ratings[file.name] = {
+                    ...metadata,
+                    shortUrl: short,
+                    type: metadata.type || 'Livre',
+                    score: metadata.score || 0
+                };
+            } else {
+                errors++;
             }
         } catch (e) {
             console.error(`Erreur sur ${file.name}`, e);
@@ -705,15 +693,10 @@ async function processAndUpload(file) {
         const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${path}`;
 
         let finalUrl = rawUrl;
-        try {
-            const shortenerUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`)}`;
-            const shortRes = await fetch(shortenerUrl);
-            if (shortRes.ok) {
-                const data = await shortRes.json();
-                const text = data.contents;
-                if (text && text.startsWith('http')) finalUrl = text;
-            }
-        } catch (e) { }
+        const short = await getShortUrl(rawUrl);
+        if (short) finalUrl = short;
+
+        updateProgress(90, "Sauvegarde métadonnées...");
 
         updateProgress(100, "Terminé !");
 
