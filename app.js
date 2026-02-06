@@ -477,18 +477,9 @@ async function generateQRFromUrl(rawUrl, name, size = 0) {
 }
 
 // Fonction centrale pour raccourcir les URLs avec Fallback
+// Fonction centrale pour raccourcir les URLs avec Fallback
 async function getShortUrl(rawUrl) {
-    // 1. Essai via CorsProxy.io + TinyURL
-    try {
-        const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`);
-        if (res.ok) {
-            const text = await res.text();
-            if (text.startsWith('http')) return text;
-        }
-    } catch (e) { console.warn("CorsProxy failed, trying fallback...", e); }
-
-    // 2. Fallback via AllOrigins
+    // 1. Essai primaire : AllOrigins (Souvent plus stable pour ce type de requête et renvoie du JSON)
     try {
         const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
         const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(target)}`);
@@ -496,7 +487,18 @@ async function getShortUrl(rawUrl) {
             const data = await res.json();
             if (data.contents && data.contents.startsWith('http')) return data.contents;
         }
-    } catch (e) { console.warn("AllOrigins failed", e); }
+    } catch (e) { console.warn("AllOrigins failed, switching...", e); }
+
+    // 2. Secours : CorsProxy
+    try {
+        await new Promise(r => setTimeout(r, 500)); // Petit délai avant retry
+        const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`);
+        if (res.ok) {
+            const text = await res.text();
+            if (text.startsWith('http')) return text;
+        }
+    } catch (e) { console.warn("CorsProxy failed", e); }
 
     return null;
 }
@@ -534,7 +536,7 @@ async function batchProcessShortUrls() {
         showToast(`Traitement ${count}/${total} : ${file.name}`);
 
         try {
-            await new Promise(r => setTimeout(r, 800)); // Pause
+            await new Promise(r => setTimeout(r, 2000)); // Pause longue (2s) pour éviter le Rate Limit
             const short = await getShortUrl(file.url);
 
             if (short) {
