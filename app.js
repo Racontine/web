@@ -180,9 +180,9 @@ async function fetchRepoUsage(token) {
             storageValue.innerText = `${sizeMBText} MB / 1 GB`;
             storageFill.style.width = `${percent}%`;
 
-            // Storage Time Calculation: 11min = 1.9MB -> ~ 5.79 min/MB
+            // Storage Time Calculation: 1GB = 100h -> 6.0 min/MB
             const remainingMB = Math.max(0, limitMB - sizeMBNum);
-            const totalRemainingMin = remainingMB * 5.79;
+            const totalRemainingMin = remainingMB * 6.0;
             const hrs = Math.floor(totalRemainingMin / 60);
             const mins = Math.floor(totalRemainingMin % 60);
 
