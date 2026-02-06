@@ -132,31 +132,25 @@ async function initLibrary(token) {
         ratings = {};
     }
 
-    // 2. Fetch Files
+    // 2. Fetch Files Recursive
     availableFiles = [];
     try {
-        const r = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/media/audio`, {
+        const r = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (r.ok) {
-            const items = await r.json();
-            availableFiles = items
-                .filter(item => item.type === 'file')
+            const result = await r.json();
+            availableFiles = result.tree
+                .filter(item => item.type === 'blob' && (item.path.startsWith('media/audio/') || item.path.startsWith('media/video/')))
                 .map(item => ({
-                    name: item.name,
-                    url: item.download_url,
+                    name: item.path.split('/').pop(),
+                    url: `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${item.path}`,
                     sha: item.sha,
                     path: item.path
                 }));
             renderLibrary();
         } else {
-            // Likely 404 if folder doesn't exist yet
-            if (r.status === 404) {
-                availableFiles = [];
-                renderLibrary(); // Empty list is fine
-            } else {
-                throw new Error(`Erreur ${r.status}: ${r.statusText}`);
-            }
+            throw new Error(`Erreur ${r.status}: ${r.statusText}`);
         }
     } catch (e) {
         libraryList.innerHTML = `<div class="loader" style="color:#ff7675">${e.message}</div>`;
@@ -211,10 +205,38 @@ function renderLibrary() {
     const minStars = starFilter ? (parseInt(starFilter.value) || 0) : 0;
     const typeTerm = typeFilter ? typeFilter.value : 'all';
 
+    // Build dynamic folders list
+    const folders = new Set();
+    availableFiles.forEach(file => {
+        const parts = file.path.split('/');
+        if (parts.length > 3) { // media/audio/FOLDER/...
+            folders.add(parts[2]);
+        }
+    });
+
+    // Update Type Filter dropdown if it has changed
+    if (typeFilter) {
+        const currentOptions = Array.from(typeFilter.options).map(o => o.value);
+        folders.forEach(folder => {
+            if (!currentOptions.includes(folder)) {
+                const opt = document.createElement('option');
+                opt.value = folder;
+                opt.innerText = folder;
+                typeFilter.appendChild(opt);
+            }
+        });
+    }
+
     const filtered = availableFiles.filter(file => {
         const metadata = ratings[file.name] || {};
         const score = typeof metadata === 'number' ? metadata : (metadata.score || 0);
-        const type = typeof metadata === 'number' ? 'Livre' : (metadata.type || 'Livre');
+        let type = typeof metadata === 'number' ? 'Livre' : (metadata.type || 'Livre');
+
+        // Check if file is in a subfolder and override type if needed
+        const parts = file.path.split('/');
+        if (parts.length > 3 && !ratings[file.name]) {
+            type = parts[2];
+        }
 
         const matchesName = file.name.toLowerCase().includes(term);
         const matchesStars = (minStars === 5) ? (score === 5) : (score >= minStars);
@@ -554,6 +576,14 @@ async function processAndUpload(file) {
         showToast('Erreur: Configuration incomplète (Token/Repo).');
         return;
     }
+
+    // Certification check
+    const isCertified = document.getElementById('certificationCheck').checked;
+    if (!isCertified) {
+        showToast('Veuillez certifier que l\'audio est bien de vous.');
+        return;
+    }
+
     resetUIForUpload();
 
     try {
