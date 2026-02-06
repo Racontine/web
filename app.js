@@ -255,35 +255,37 @@ function renderLibrary() {
         const row = document.createElement('div');
         row.className = 'library-item';
 
+        // Store data for event delegation
+        row.dataset.name = file.name;
+        row.dataset.url = file.url;
+        row.dataset.path = file.path;
+        row.dataset.sha = file.sha;
+
         const metadata = ratings[file.name] || {};
         const score = typeof metadata === 'number' ? metadata : (metadata.score || 0);
         const type = typeof metadata === 'number' ? 'Livre' : (metadata.type || 'Livre');
 
-        const safeName = file.name.replace(/'/g, "\\'");
-
         row.innerHTML = `
-            <div class="item-info" onclick="generateQRFromUrl('${file.url}', '${safeName}')">
+            <div class="item-info action-qr">
                 <div class="item-icon">🎵</div>
                 <div class="item-column">
                     <div class="item-name" title="${file.name}">${file.name}</div>
-                    <span class="item-badge ${type.toLowerCase()}" 
-                          onclick="event.stopPropagation(); toggleFileType('${safeName}')"
+                    <span class="item-badge ${type.toLowerCase()} action-toggle-type" 
                           title="Cliquez pour changer le type">${type}</span>
                 </div>
             </div>
             <div class="item-right-section">
                 <div class="item-rating">
                     ${[1, 2, 3, 4, 5].map(i => `
-                        <span class="star ${i <= score ? 'filled' : ''}" 
-                               onclick="event.stopPropagation(); rateFile('${safeName}', ${i})">★</span>
+                        <span class="star ${i <= score ? 'filled' : ''} action-rate" data-value="${i}">★</span>
                     `).join('')}
                 </div>
-                <button class="download-btn" onclick="event.stopPropagation(); downloadTag('${file.url}', '${safeName}')" title="Télécharger l'étiquette">
+                <button class="download-btn action-download" title="Télécharger l'étiquette">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                     </svg>
                 </button>
-                <button class="delete-btn" onclick="event.stopPropagation(); deleteFile('${safeName}', '${file.path}', '${file.sha}')" title="Supprimer">
+                <button class="delete-btn action-delete" title="Supprimer">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                     </svg>
@@ -291,6 +293,33 @@ function renderLibrary() {
             </div>
         `;
         libraryList.appendChild(row);
+    });
+}
+
+// Global Event Delegation for Library
+if (libraryList) {
+    libraryList.addEventListener('click', (e) => {
+        const row = e.target.closest('.library-item');
+        if (!row) return;
+
+        const name = row.dataset.name;
+        const url = row.dataset.url;
+        const path = row.dataset.path;
+        const sha = row.dataset.sha;
+
+        // Route actions based on clicked class
+        if (e.target.closest('.action-qr')) {
+            generateQRFromUrl(url, name);
+        } else if (e.target.closest('.action-toggle-type')) {
+            toggleFileType(name);
+        } else if (e.target.closest('.action-rate')) {
+            const val = parseInt(e.target.dataset.value);
+            rateFile(name, val);
+        } else if (e.target.closest('.action-download')) {
+            downloadTag(url, name);
+        } else if (e.target.closest('.action-delete')) {
+            deleteFile(name, path, sha);
+        }
     });
 }
 
