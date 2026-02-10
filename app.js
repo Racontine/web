@@ -788,23 +788,56 @@ function showResult(url, name) {
     uploadSection.classList.add('hidden');
     resultSection.classList.remove('hidden');
     uploadedFilename.innerText = name;
-    qrContainer.innerHTML = '<canvas id="qrCanvas"></canvas>';
+
+    // Canvas dimensions for rich tag
+    const qrSize = 300;
+    const textAreaH = 80;
+    const finalW = qrSize;
+    const finalH = qrSize + textAreaH;
+
+    qrContainer.innerHTML = `<canvas id="qrCanvas" width="${finalW}" height="${finalH}" style="max-width: 100%; height: auto; border-radius: 8px;"></canvas>`;
 
     const canvas = document.getElementById('qrCanvas');
-    QRCode.toCanvas(canvas, url, {
-        width: 200,
+    const ctx = canvas.getContext('2d');
+
+    // Fill white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, finalW, finalH);
+
+    // Use a temporary canvas to generate the QR code
+    const tempCanvas = document.createElement('canvas');
+    QRCode.toCanvas(tempCanvas, url, {
+        width: qrSize,
         margin: 2,
         color: {
             dark: '#10002b',
             light: '#ffffff'
         },
-        errorCorrectionLevel: 'L' // Low pour permettre des URLs plus longues si besoin
+        errorCorrectionLevel: 'M'
     }, function (error) {
         if (error) {
             console.error(error);
             showToast("Erreur QR: URL trop longue ?");
-            qrContainer.innerHTML = '<div style="color:red; font-size:0.8rem;">URL trop longue pour le QR Code. Essayez de raccourcir le nom du fichier.</div>';
+            qrContainer.innerHTML = '<div style="color:red; font-size:0.8rem;">Erreur de génération du QR Code.</div>';
+            return;
         }
+
+        // 1. Draw QR code onto main canvas
+        ctx.drawImage(tempCanvas, 0, 0);
+
+        // 2. Draw Filename
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 18px Arial';
+
+        let displayName = name;
+        if (displayName.length > 25) displayName = displayName.substring(0, 22) + "...";
+        ctx.fillText(displayName, finalW / 2, qrSize + 30);
+
+        // 3. Draw Footer
+        ctx.fillStyle = '#999999';
+        ctx.font = '14px Arial';
+        ctx.fillText("Racontine", finalW / 2, finalH - 15);
     });
 
     const linkContainer = document.createElement('div');
