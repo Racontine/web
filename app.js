@@ -532,26 +532,25 @@ async function generateQRFromUrl(rawUrl, name, size = 0) {
 }
 
 // Fonction centrale pour raccourcir les URLs avec Fallback
-// Fonction centrale pour raccourcir les URLs avec Fallback
 async function getShortUrl(rawUrl) {
-    // 1. Essai primaire : AllOrigins (Souvent plus stable pour ce type de requête et renvoie du JSON)
+    // 1. Essai primaire : is.gd via AllOrigins
     try {
-        const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
+        const target = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(rawUrl)}`;
         const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(target)}`);
         if (res.ok) {
             const data = await res.json();
-            if (data.contents && data.contents.startsWith('http')) return data.contents;
+            if (data.contents && data.contents.startsWith('http')) return data.contents.trim();
         }
     } catch (e) { console.warn("AllOrigins failed, switching...", e); }
 
-    // 2. Secours : CorsProxy
+    // 2. Secours : CorsProxy (ou direct si is.gd supporte CORS)
     try {
-        await new Promise(r => setTimeout(r, 500)); // Petit délai avant retry
-        const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
+        await new Promise(r => setTimeout(r, 500));
+        const target = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(rawUrl)}`;
         const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`);
         if (res.ok) {
             const text = await res.text();
-            if (text.startsWith('http')) return text;
+            if (text.startsWith('http')) return text.trim();
         }
     } catch (e) { console.warn("CorsProxy failed", e); }
 
