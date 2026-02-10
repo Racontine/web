@@ -533,15 +533,18 @@ async function generateQRFromUrl(rawUrl, name, size = 0) {
 
 // La "Méthode d'Or" : is.gd + JSONP (Infaillible contre CORS)
 async function getShortUrl(rawUrl) {
+    console.log("[is.gd] Starting URL shortening for:", rawUrl);
     return new Promise((resolve) => {
         const callbackName = 'isgd_callback_' + Math.floor(Math.random() * 1000000);
 
         // Création du callback temporaire
         window[callbackName] = function (data) {
+            console.log("[is.gd] Response received:", data);
             if (data.shorturl) {
+                console.log("[is.gd] Success! Short URL:", data.shorturl);
                 resolve(data.shorturl);
             } else {
-                console.error("is.gd error:", data.errormessage);
+                console.error("[is.gd] Error from API:", data.errormessage);
                 resolve(null);
             }
             delete window[callbackName];
@@ -552,8 +555,10 @@ async function getShortUrl(rawUrl) {
         script.id = callbackName;
         script.src = `https://is.gd/create.php?format=jsonp&callback=${callbackName}&url=${encodeURIComponent(rawUrl)}`;
 
+        console.log("[is.gd] Making JSONP request...");
+
         script.onerror = () => {
-            console.error("is.gd JSONP request failed");
+            console.error("[is.gd] Script loading failed (network error or CORS issue)");
             resolve(null);
             delete window[callbackName];
             script.remove();
@@ -561,14 +566,15 @@ async function getShortUrl(rawUrl) {
 
         document.body.appendChild(script);
 
-        // Timeout de sécurité
+        // Timeout de sécurité (augmenté à 10s)
         setTimeout(() => {
             if (window[callbackName]) {
+                console.warn("[is.gd] Timeout after 10 seconds, giving up");
                 resolve(null);
                 delete window[callbackName];
                 script.remove();
             }
-        }, 5000);
+        }, 10000);
     });
 }
 
