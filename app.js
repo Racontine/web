@@ -468,13 +468,20 @@ async function pushRatings(token) {
 async function deleteFile(name, path, sha) {
     if (!confirm(`Voulez-vous vraiment supprimer "${name}" ?`)) return;
 
-    const token = localStorage.getItem('gh_pat');
-    if (!token || !REPO_OWNER || !REPO_NAME) return;
-
+    // 1. Remove from UI immediately for instant feedback
     availableFiles = availableFiles.filter(f => f.name !== name);
     renderLibrary();
 
+    const token = localStorage.getItem('gh_pat');
+
+    // If we don't have a token or path/sha, we just leave it deleted from the UI
+    if (!token || !path || !sha) {
+        showToast(`"${name}" retiré de l'affichage (non supprimé du Git).`);
+        return;
+    }
+
     try {
+        console.log(`[Git] Suppression de ${path} (SHA: ${sha})...`);
         const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, {
             method: 'DELETE',
             headers: {
@@ -482,20 +489,28 @@ async function deleteFile(name, path, sha) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                message: `Delete ${name}`,
+                message: `Suppression via Web Manager: ${name}`,
                 sha: sha,
                 branch: BRANCH
             })
         });
 
         if (response.ok) {
-            showToast(`${name} supprimé ! 🗑️`);
+            showToast(`${name} supprimé du Git ! 🗑️`);
             fetchRepoUsage(token);
+            // Also cleanup ratings if exists
+            if (ratings[name]) {
+                delete ratings[name];
+                pushRatings(token);
+            }
         } else {
-            throw new Error(response.statusText);
+            const err = await response.json();
+            throw new Error(err.message || response.statusText);
         }
     } catch (e) {
-        showToast(`Erreur suppression: ${e.message}`);
+        console.error("Erreur suppression Git:", e);
+        showToast(`Erreur Git: ${e.message}. Le fichier est revenu dans la liste.`);
+        // Re-init library to restore the file if deletion failed
         initLibrary(token);
     }
 }
