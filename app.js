@@ -707,7 +707,7 @@ async function processAndUpload(file) {
         let fileToUpload = file;
         let filename = file.name;
         const ext = filename.split('.').pop().toLowerCase();
-        const isAudio = file.type.startsWith('audio/') || ext === 'wav' || ext === 'ogg';
+        const isAudio = file.type.startsWith('audio/') || ext === 'wav' || ext === 'ogg' || ext === 'm4a';
         const isVideo = file.type.startsWith('video/') || ['mp4', 'mpeg', 'avi', 'mov', 'mkv', 'webm'].includes(ext);
 
         const selectedType = document.querySelector('input[name="uploadType"]:checked').value;
