@@ -531,30 +531,45 @@ async function generateQRFromUrl(rawUrl, name, size = 0) {
     showResult(finalUrl, name);
 }
 
-// Fonction centrale pour raccourcir les URLs avec Fallback
+// La "Méthode d'Or" : is.gd + JSONP (Infaillible contre CORS)
 async function getShortUrl(rawUrl) {
-    // 1. Essai primaire : is.gd via AllOrigins
-    try {
-        const target = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(rawUrl)}`;
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(target)}`);
-        if (res.ok) {
-            const data = await res.json();
-            if (data.contents && data.contents.startsWith('http')) return data.contents.trim();
-        }
-    } catch (e) { console.warn("AllOrigins failed, switching...", e); }
+    return new Promise((resolve) => {
+        const callbackName = 'isgd_callback_' + Math.floor(Math.random() * 1000000);
 
-    // 2. Secours : CorsProxy (ou direct si is.gd supporte CORS)
-    try {
-        await new Promise(r => setTimeout(r, 500));
-        const target = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(rawUrl)}`;
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`);
-        if (res.ok) {
-            const text = await res.text();
-            if (text.startsWith('http')) return text.trim();
-        }
-    } catch (e) { console.warn("CorsProxy failed", e); }
+        // Création du callback temporaire
+        window[callbackName] = function (data) {
+            if (data.shorturl) {
+                resolve(data.shorturl);
+            } else {
+                console.error("is.gd error:", data.errormessage);
+                resolve(null);
+            }
+            delete window[callbackName];
+            document.getElementById(callbackName)?.remove();
+        };
 
-    return null;
+        const script = document.createElement('script');
+        script.id = callbackName;
+        script.src = `https://is.gd/create.php?format=jsonp&callback=${callbackName}&url=${encodeURIComponent(rawUrl)}`;
+
+        script.onerror = () => {
+            console.error("is.gd JSONP request failed");
+            resolve(null);
+            delete window[callbackName];
+            script.remove();
+        };
+
+        document.body.appendChild(script);
+
+        // Timeout de sécurité
+        setTimeout(() => {
+            if (window[callbackName]) {
+                resolve(null);
+                delete window[callbackName];
+                script.remove();
+            }
+        }, 5000);
+    });
 }
 
 function saveShortUrl(name, shortUrl) {
