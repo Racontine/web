@@ -533,18 +533,16 @@ async function generateQRFromUrl(rawUrl, name, size = 0) {
 
 // La "Méthode d'Or" : is.gd + JSONP (Infaillible contre CORS)
 async function getShortUrl(rawUrl) {
-    console.log("[is.gd] Starting URL shortening for:", rawUrl);
-    return new Promise((resolve) => {
-        const callbackName = 'isgd_callback_' + Math.floor(Math.random() * 1000000);
+    console.log("[Shorten] Tentative via is.gd (JSONP)...");
 
-        // Création du callback temporaire
+    // 1. ESSAI PRIMAIRE : is.gd JSONP (Correction: format=json)
+    const jsonpPromise = new Promise((resolve) => {
+        const callbackName = 'isgd_callback_' + Math.floor(Math.random() * 1000000);
         window[callbackName] = function (data) {
-            console.log("[is.gd] Response received:", data);
             if (data.shorturl) {
-                console.log("[is.gd] Success! Short URL:", data.shorturl);
+                console.log("[Shorten] Succès is.gd (JSONP):", data.shorturl);
                 resolve(data.shorturl);
             } else {
-                console.error("[is.gd] Error from API:", data.errormessage);
                 resolve(null);
             }
             delete window[callbackName];
@@ -553,29 +551,58 @@ async function getShortUrl(rawUrl) {
 
         const script = document.createElement('script');
         script.id = callbackName;
-        script.src = `https://is.gd/create.php?format=jsonp&callback=${callbackName}&url=${encodeURIComponent(rawUrl)}`;
-
-        console.log("[is.gd] Making JSONP request...");
+        script.src = `https://is.gd/create.php?format=json&callback=${callbackName}&url=${encodeURIComponent(rawUrl)}`;
 
         script.onerror = () => {
-            console.error("[is.gd] Script loading failed (network error or CORS issue)");
+            console.warn("[Shorten] Échec chargement script JSONP");
             resolve(null);
             delete window[callbackName];
             script.remove();
         };
 
         document.body.appendChild(script);
-
-        // Timeout de sécurité (augmenté à 10s)
         setTimeout(() => {
             if (window[callbackName]) {
-                console.warn("[is.gd] Timeout after 10 seconds, giving up");
+                console.warn("[Shorten] Timeout JSONP");
                 resolve(null);
                 delete window[callbackName];
                 script.remove();
             }
-        }, 10000);
+        }, 5000);
     });
+
+    const result = await jsonpPromise;
+    if (result) return result;
+
+    // 2. FALLBACK 1 : is.gd via AllOrigins (si JSONP bloqué)
+    console.log("[Shorten] Fallback 1: is.gd via AllOrigins...");
+    try {
+        const target = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(rawUrl)}`;
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(target)}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.contents && data.contents.startsWith('http')) {
+                console.log("[Shorten] Succès is.gd (AllOrigins):", data.contents);
+                return data.contents.trim();
+            }
+        }
+    } catch (e) { console.warn("[Shorten] Échec AllOrigins"); }
+
+    // 3. FALLBACK 2 : TinyURL via Proxy (Dernier recours)
+    console.log("[Shorten] Fallback 2: TinyURL via Proxy...");
+    try {
+        const target = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`;
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`);
+        if (res.ok) {
+            const text = await res.text();
+            if (text.startsWith('http')) {
+                console.log("[Shorten] Succès TinyURL:", text);
+                return text.trim();
+            }
+        }
+    } catch (e) { console.warn("[Shorten] Échec TinyURL"); }
+
+    return null;
 }
 
 function saveShortUrl(name, shortUrl) {
