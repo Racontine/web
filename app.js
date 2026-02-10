@@ -347,18 +347,29 @@ if (typeFilter) typeFilter.addEventListener('change', renderLibrary);
 
 /* --- TAG DOWNLOAD --- */
 async function downloadTag(rawUrl, name) {
+    // Check if there's already a QR code displayed in the result section
+    const displayedCanvas = document.getElementById('qrCanvas');
+
+    if (displayedCanvas) {
+        // Download the currently displayed QR code directly
+        const link = document.createElement('a');
+        link.href = displayedCanvas.toDataURL('image/png');
+        link.download = `${name.split('.')[0]}_qr.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("Étiquette téléchargée !");
+        return;
+    }
+
+    // Fallback: Generate QR from URL if no canvas is displayed
     // 1. Check Metadata
     const existing = ratings[name] || {};
     let finalUrl = (existing.shortUrl && existing.shortUrl.length < 50) ? existing.shortUrl : rawUrl;
 
-    // 2. If no short URL, try to generate one locally
+    // 2. If no short URL, use raw URL directly (skip CORS-prone shortening)
     if (finalUrl === rawUrl) {
-        showToast("Lien court...");
-        const short = await getShortUrl(rawUrl);
-        if (short) {
-            finalUrl = short;
-            saveShortUrl(name, finalUrl);
-        }
+        console.warn("No short URL available, using raw URL for QR code");
     }
 
     // Use a temporary div to render QR
