@@ -463,6 +463,105 @@ async function downloadDisc(rawUrl, name) {
     }
 }
 
+/* --- BULK DISC DOWNLOAD (MULTI-PAGE PDF) --- */
+async function downloadAllDiscs() {
+    if (!availableFiles || availableFiles.length === 0) return;
+
+    const term = searchInput ? searchInput.value.toLowerCase() : '';
+    const minStars = starFilter ? (parseInt(starFilter.value) || 0) : 0;
+    const typeTerm = typeFilter ? typeFilter.value : 'all';
+
+    const filtered = availableFiles.filter(file => {
+        const metadata = ratings[file.name] || {};
+        const score = typeof metadata === 'number' ? metadata : (metadata.score || 0);
+
+        let type = 'Livre';
+        const parts = file.path.split('/');
+        if (parts.length > 3) {
+            type = parts[2];
+        } else if (typeof metadata === 'object' && metadata.type) {
+            type = metadata.type;
+        } else if (typeof metadata === 'number') {
+            type = 'Livre';
+        }
+
+        const matchesName = file.name.toLowerCase().includes(term);
+        const matchesStars = (minStars === 5) ? (score === 5) : (score >= minStars);
+        const matchesType = (typeTerm === 'all') || (type === typeTerm);
+
+        return matchesName && matchesStars && matchesType;
+    });
+
+    if (filtered.length === 0) {
+        showToast("Aucun disque à télécharger avec ces filtres.");
+        return;
+    }
+
+    showToast(`Préparation du PDF pour ${filtered.length} disque(s)... ⏳`);
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'cm',
+            format: 'a4'
+        });
+
+        // Constants and coordinates
+        const targetWidth = 3.56;
+        const posTopLeft = 8.73;
+        const posTopTop = 5.6039;
+        const posBotLeft = 8.73;
+        const posBotTop = 20.5315;
+
+        // Background template
+        const bgImg = new Image();
+        bgImg.src = 'disqueQR.png';
+
+        await new Promise((resolve, reject) => {
+            bgImg.onload = resolve;
+            bgImg.onerror = () => reject(new Error("Impossible de charger disqueQR.png"));
+        });
+
+        for (let i = 0; i < filtered.length; i++) {
+            const file = filtered[i];
+            const metadata = ratings[file.name] || {};
+            let finalUrl = (metadata.shortUrl && metadata.shortUrl.length < 50) ? metadata.shortUrl : file.url;
+
+            // Generate QR code
+            const qrDataUrl = await QRCode.toDataURL(finalUrl, {
+                width: 400,
+                margin: 2,
+                errorCorrectionLevel: 'H'
+            });
+
+            if (i > 0) {
+                doc.addPage();
+            }
+
+            // Add background
+            doc.addImage(bgImg, 'PNG', 0, 0, 21, 29.7);
+
+            // Add QR codes
+            doc.addImage(qrDataUrl, 'PNG', posTopLeft, posTopTop, targetWidth, targetWidth);
+            doc.addImage(qrDataUrl, 'PNG', posBotLeft, posBotTop, targetWidth, targetWidth);
+
+            // Add media title to top disc
+            let displayName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+            if (displayName.length > 35) displayName = displayName.substring(0, 32) + "...";
+            doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
+            doc.text(displayName, 10.51, 11.02, { align: 'center' });
+        }
+
+        doc.save(`Tous_Les_Disques_${filtered.length}.pdf`);
+        showToast(`PDF de ${filtered.length} disques prêt ! 📀`);
+    } catch (err) {
+        console.error(err);
+        showToast("Erreur génération PDF groupé : " + err.message);
+    }
+}
+
 /* --- ACTIONS --- */
 async function rateFile(filename, score) {
     const token = localStorage.getItem('gh_pat');
