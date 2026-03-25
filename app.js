@@ -1002,7 +1002,29 @@ function showResult(url, name) {
     downloadBtn.onclick = () => downloadTag(url, safeName);
 
     // Insert before the filename/reset button
-    uploadedFilename.parentNode.insertBefore(downloadBtn, uploadedFilename);
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.gap = '1rem';
+    container.style.justifyContent = 'center';
+    container.style.margin = '1.5rem auto 0 auto';
+
+    container.appendChild(downloadBtn);
+
+    const downloadDiscBtn = document.createElement('button');
+    downloadDiscBtn.className = 'download-result-btn'; // We can reuse the same base class
+    downloadDiscBtn.style.background = 'var(--primary)'; // Distinct color
+    downloadDiscBtn.style.boxShadow = '0 4px 15px rgba(157, 78, 221, 0.3)';
+    downloadDiscBtn.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        Télécharger le disque
+    `;
+    downloadDiscBtn.onclick = () => downloadDisc(url, safeName);
+    container.appendChild(downloadDiscBtn);
+
+    uploadedFilename.parentNode.insertBefore(container, uploadedFilename);
 }
 
 function resetApp() {
