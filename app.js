@@ -424,12 +424,12 @@ async function downloadDisc(rawUrl, name) {
             format: 'a4'
         });
 
-        // VBA Constants and coordinates
+        // VBA Constants and coordinates (adjusted by +9.9mm X, +5.339mm Y)
         const targetWidth = 3.56;
-        const posTopLeft = 7.74;
-        const posTopTop = 5.07;
-        const posBotLeft = 7.74;
-        const posBotTop = 18.89;
+        const posTopLeft = 8.73; // 7.74 + 0.99
+        const posTopTop = 5.6039; // 5.07 + 0.5339
+        const posBotLeft = 8.73; // 7.74 + 0.99
+        const posBotTop = 19.4239; // 18.89 + 0.5339
 
         // Background template (disqueQR.png)
         const bgImg = new Image();
