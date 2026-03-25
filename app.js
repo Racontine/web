@@ -986,9 +986,13 @@ function showResult(url, name) {
     linkContainer.appendChild(link);
     qrContainer.appendChild(linkContainer);
 
-    // Add Download Tag button to Result Section (outside QR box)
-    const existingBtn = resultSection.querySelector('.download-result-btn');
-    if (existingBtn) existingBtn.remove();
+    // Remove any existing buttons to prevent duplication
+    const existingContainer = resultSection.querySelector('.download-buttons-container');
+    if (existingContainer) existingContainer.remove();
+
+    // Fallback: remove any stray single buttons from an older run
+    const strayBtns = resultSection.querySelectorAll('.download-result-btn');
+    strayBtns.forEach(btn => btn.remove());
 
     const downloadBtn = document.createElement('button');
     const safeName = name.replace(/'/g, "\\'");
@@ -1003,6 +1007,7 @@ function showResult(url, name) {
 
     // Insert before the filename/reset button
     const container = document.createElement('div');
+    container.className = 'download-buttons-container';
     container.style.display = 'flex';
     container.style.gap = '1rem';
     container.style.justifyContent = 'center';
