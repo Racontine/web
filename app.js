@@ -429,7 +429,7 @@ async function downloadDisc(rawUrl, name) {
         const posTopLeft = 8.73; // 7.74 + 0.99
         const posTopTop = 5.6039; // 5.07 + 0.5339
         const posBotLeft = 8.73; // 7.74 + 0.99
-        const posBotTop = 18.3245; // 19.4239 - 1.0994 (trop bas de 10.994mm)
+        const posBotTop = 20.5315; // 18.3245 + 2.207 (rebaissé de 22.07mm)
 
         // Background template (disqueQR.png)
         const bgImg = new Image();
