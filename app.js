@@ -380,25 +380,25 @@ async function downloadTag(rawUrl, name) {
         console.warn("No short URL available, using raw URL for QR code");
     }
 
-    // Use a temporary div to render QR
-    const tempDiv = document.createElement('div');
-    new QRCode(tempDiv, { text: finalUrl, width: 400, height: 400, correctLevel: QRCode.CorrectLevel.H });
-
-    // Wait for QR to render (qrcode.js is synchronous but just in case)
-    setTimeout(() => {
-        const img = tempDiv.querySelector('img');
-        if (img) {
+    // Use QRCode.toDataURL for reliable generation
+    QRCode.toDataURL(finalUrl, {
+        width: 400,
+        margin: 2,
+        errorCorrectionLevel: 'H'
+    }, (err, url) => {
+        if (url) {
             const link = document.createElement('a');
-            link.href = img.src;
+            link.href = url;
             link.download = `${name.split('.')[0]}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             showToast("Étiquette téléchargée !");
         } else {
+            console.error(err);
             showToast("Erreur lors de la génération");
         }
-    }, 100);
+    });
 }
 
 /* --- DISC DOWNLOAD (PDF) --- */
@@ -409,58 +409,51 @@ async function downloadDisc(rawUrl, name) {
     const existing = ratings[name] || {};
     let finalUrl = (existing.shortUrl && existing.shortUrl.length < 50) ? existing.shortUrl : rawUrl;
 
-    // 2. Generate QR code as Image (using a hidden canvas)
-    const tempDiv = document.createElement('div');
-    new QRCode(tempDiv, { text: finalUrl, width: 400, height: 400, correctLevel: QRCode.CorrectLevel.H });
+    // 2. Generate QR code as Image (using a promise)
+    try {
+        const qrDataUrl = await QRCode.toDataURL(finalUrl, {
+            width: 400,
+            margin: 2,
+            errorCorrectionLevel: 'H'
+        });
 
-    // Wait for QR to render
-    setTimeout(async () => {
-        const qrImg = tempDiv.querySelector('img');
-        if (!qrImg) {
-            showToast("Erreur lors de la génération du QR");
-            return;
-        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'cm',
+            format: 'a4'
+        });
 
-        try {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: 'p',
-                unit: 'cm',
-                format: 'a4'
-            });
+        // VBA Constants and coordinates
+        const targetWidth = 3.56;
+        const posTopLeft = 7.74;
+        const posTopTop = 5.07;
+        const posBotLeft = 7.74;
+        const posBotTop = 18.89;
 
-            // VBA Constants and coordinates
-            const targetWidth = 3.56;
-            const posTopLeft = 7.74;
-            const posTopTop = 5.07;
-            const posBotLeft = 7.74;
-            const posBotTop = 18.89;
+        // Background template (disqueQR.png)
+        const bgImg = new Image();
+        bgImg.src = 'disqueQR.png';
 
-            // Background template (disqueQR.png)
-            // Note: In a web environment, we need to load the image first
-            const bgImg = new Image();
-            bgImg.src = 'disqueQR.png';
-            
-            await new Promise((resolve, reject) => {
-                bgImg.onload = resolve;
-                bgImg.onerror = () => reject(new Error("Impossible de charger disqueQR.png"));
-            });
+        await new Promise((resolve, reject) => {
+            bgImg.onload = resolve;
+            bgImg.onerror = () => reject(new Error("Impossible de charger disqueQR.png"));
+        });
 
-            // Add background (A4 is 21 x 29.7 cm)
-            doc.addImage(bgImg, 'PNG', 0, 0, 21, 29.7);
+        // Add background (A4 is 21 x 29.7 cm)
+        doc.addImage(bgImg, 'PNG', 0, 0, 21, 29.7);
 
-            // Add QR codes (Top and Bottom)
-            doc.addImage(qrImg.src, 'PNG', posTopLeft, posTopTop, targetWidth, targetWidth);
-            doc.addImage(qrImg.src, 'PNG', posBotLeft, posBotTop, targetWidth, targetWidth);
+        // Add QR codes (Top and Bottom)
+        doc.addImage(qrDataUrl, 'PNG', posTopLeft, posTopTop, targetWidth, targetWidth);
+        doc.addImage(qrDataUrl, 'PNG', posBotLeft, posBotTop, targetWidth, targetWidth);
 
-            // Download
-            doc.save(`${name.split('.')[0]}_disque.pdf`);
-            showToast("Disque PDF téléchargé ! 📀");
-        } catch (err) {
-            console.error(err);
-            showToast("Erreur génération PDF : " + err.message);
-        }
-    }, 200);
+        // Download
+        doc.save(`${name.split('.')[0]}_disque.pdf`);
+        showToast("Disque PDF téléchargé ! 📀");
+    } catch (err) {
+        console.error(err);
+        showToast("Erreur génération PDF : " + err.message);
+    }
 }
 
 /* --- ACTIONS --- */
