@@ -332,10 +332,10 @@ if (libraryList) {
         const sha = row.dataset.sha;
 
         // Route actions based on clicked class
-        if (e.target.closest('.action-qr')) {
-            generateQRFromUrl(url, name);
-        } else if (e.target.closest('.action-toggle-type')) {
+        if (e.target.closest('.action-toggle-type')) {
             toggleFileType(name);
+        } else if (e.target.closest('.action-qr')) {
+            generateQRFromUrl(url, name);
         } else if (e.target.closest('.action-rate')) {
             const val = parseInt(e.target.dataset.value);
             rateFile(name, val);
