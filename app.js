@@ -424,12 +424,12 @@ async function downloadDisc(rawUrl, name) {
             format: 'a4'
         });
 
-        // VBA Constants and coordinates (adjusted by +9.9mm X, +5.339mm Y)
+        // VBA Constants and coordinates (adjusted by +9.9mm X, +5.339mm Y for top)
         const targetWidth = 3.56;
         const posTopLeft = 8.73; // 7.74 + 0.99
         const posTopTop = 5.6039; // 5.07 + 0.5339
         const posBotLeft = 8.73; // 7.74 + 0.99
-        const posBotTop = 19.4239; // 18.89 + 0.5339
+        const posBotTop = 18.3245; // 19.4239 - 1.0994 (trop bas de 10.994mm)
 
         // Background template (disqueQR.png)
         const bgImg = new Image();
@@ -446,6 +446,13 @@ async function downloadDisc(rawUrl, name) {
         // Add QR codes (Top and Bottom)
         doc.addImage(qrDataUrl, 'PNG', posTopLeft, posTopTop, targetWidth, targetWidth);
         doc.addImage(qrDataUrl, 'PNG', posBotLeft, posBotTop, targetWidth, targetWidth);
+
+        // Add media title to the top disc (X=10.51cm, Y=11.02cm based on Illustrator)
+        let displayName = name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+        if (displayName.length > 35) displayName = displayName.substring(0, 32) + "...";
+        doc.setFontSize(11); // Adjust if needed
+        doc.setTextColor(0, 0, 0);
+        doc.text(displayName, 10.51, 11.02, { align: 'center' });
 
         // Download
         doc.save(`${name.split('.')[0]}_disque.pdf`);
