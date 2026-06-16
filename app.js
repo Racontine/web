@@ -560,7 +560,7 @@ async function downloadAllDisquettes() {
     }
 }
 
-/* --- BULK TAG DOWNLOAD (MULTI-PAGE PDF) --- */
+/* --- BULK TAG DOWNLOAD (1 étiquette par page 62x90mm) --- */
 async function downloadAllTags() {
     if (!availableFiles || availableFiles.length === 0) return;
 
@@ -598,25 +598,29 @@ async function downloadAllTags() {
 
     try {
         const { jsPDF } = window.jspdf;
+
+        // Page = taille de l'étiquette : 62mm x 90mm
+        const pageW = 6.2;  // cm
+        const pageH = 9.0;  // cm
+        const margin = 0.3; // cm
+
+        // QR code occupe toute la largeur utile
+        const qrSize = pageW - 2 * margin; // 5.6cm
+        const qrX = margin;
+        const qrY = margin;
+
+        // Titre sous le QR
+        const titleY = qrY + qrSize + 0.55;
+
         const doc = new jsPDF({
             orientation: 'p',
             unit: 'cm',
-            format: 'a4'
+            format: [pageW, pageH]
         });
 
-        // Grille de 3x4 = 12 étiquettes par page
-        const cols = 3;
-        const rows = 4;
-        const tagsPerPage = cols * rows;
-        const qrSize = 4.5; // cm
-        const marginX = 2.5;
-        const marginY = 2.5;
-        const spacingX = (21 - 2 * marginX - cols * qrSize) / (cols - 1 || 1);
-        const spacingY = (29.7 - 2 * marginY - rows * (qrSize + 1)) / (rows - 1 || 1);
-
         for (let i = 0; i < filtered.length; i++) {
-            if (i > 0 && i % tagsPerPage === 0) {
-                doc.addPage();
+            if (i > 0) {
+                doc.addPage([pageW, pageH]);
             }
 
             const file = filtered[i];
@@ -625,26 +629,19 @@ async function downloadAllTags() {
 
             const qrDataUrl = await QRCode.toDataURL(finalUrl, {
                 width: 400,
-                margin: 2,
+                margin: 1,
                 errorCorrectionLevel: 'H'
             });
 
-            const pageIndex = i % tagsPerPage;
-            const col = pageIndex % cols;
-            const row = Math.floor(pageIndex / cols);
+            // QR code
+            doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
 
-            const x = marginX + col * (qrSize + spacingX);
-            const y = marginY + row * (qrSize + 1 + spacingY);
-
-            // Add QR code
-            doc.addImage(qrDataUrl, 'PNG', x, y, qrSize, qrSize);
-
-            // Add text
+            // Titre
             let displayName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-            if (displayName.length > 25) displayName = displayName.substring(0, 22) + "...";
-            doc.setFontSize(10);
+            if (displayName.length > 22) displayName = displayName.substring(0, 19) + "...";
+            doc.setFontSize(9);
             doc.setTextColor(0, 0, 0);
-            doc.text(displayName, x + qrSize/2, y + qrSize + 0.5, { align: 'center' });
+            doc.text(displayName, pageW / 2, titleY, { align: 'center' });
         }
 
         doc.save(`Tous_Les_etiquettes_${filtered.length}.pdf`);
