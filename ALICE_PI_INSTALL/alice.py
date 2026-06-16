@@ -103,24 +103,24 @@ FRAME_SKIP = 3  # Analyze 1 out of every 3 frames
 
 
 # ======================
-# AUDIO PLAYER CLASS
+# AUDIO PLAYER CLASS (Modifiée pour Replay)
 # ======================
 class AudioPlayer:
     def __init__(self):
         self.process = None
         self.paused = False
         self.current_path = None
+        self.last_path = None  # Mémorise le dernier fichier joué pour le replay
 
     def play_blocking(self, path: str):
-        """Plays audio and waits for it to finish."""
         print(f"▶️  Lecture (bloquante) : {path}")
         cmd = self._get_cmd(path)
         subprocess.run(cmd, check=False)
 
     def start(self, path: str):
-        """Starts audio in background (kill previous if any)."""
         self.stop()
         self.current_path = path
+        self.last_path = path # On stocke pour un futur replay
         self.paused = False
         
         print(f"▶️  Lecture : {path}")
@@ -128,7 +128,6 @@ class AudioPlayer:
         self.process = subprocess.Popen(cmd)
 
     def stop(self):
-        """Stops current background audio."""
         if self.process:
             if self.process.poll() is None:
                 try:
@@ -141,17 +140,20 @@ class AudioPlayer:
         self.current_path = None
 
     def is_playing(self):
-        """Returns True if audio is playing in background."""
+        # Retourne True uniquement si le processus est en cours
         return self.process is not None and self.process.poll() is None
 
     def toggle_pause(self):
-        """Toggles pause/resume for current background audio."""
-        if not self.process or self.process.poll() is not None:
+        # Vérification explicite : si le process n'existe plus ou est fini
+        if self.process is None or self.process.poll() is not None:
+            if self.last_path:
+                print(f"🔄 Fin de média détectée. Replay de : {self.last_path}")
+                self.start(self.last_path)
+            else:
+                print("ℹ️ Aucun média en mémoire pour le replay")
             return
 
-        # On laisse passer le signal même pour les WAV
-        pass
-
+        # Si le média est encore en cours de lecture
         try:
             if not self.paused:
                 self.process.send_signal(signal.SIGSTOP)
@@ -162,7 +164,7 @@ class AudioPlayer:
                 self.paused = False
                 print("▶️  Reprise")
         except Exception as e:
-            print(f"⚠️  Erreur pause/play: {e}")
+            print(f"⚠️ Erreur signal: {e}")
 
     def _get_cmd(self, path: str):
         if path.lower().endswith(".mp3"):
@@ -170,6 +172,19 @@ class AudioPlayer:
         else:
             return ["aplay", "-q", "-f", str(DEFAULT_GAIN), path]
 
+# ======================
+# BUTTONS HANDLERS
+# ======================
+def on_touch_pressed():
+    # La logique est maintenant centralisée dans player.toggle_pause()
+    player.toggle_pause()
+
+def on_hat_pressed():
+    print("🔄 Bouton HAT → retour scan QR")
+    player.stop()
+    player.last_path = None # On oublie le dernier média pour éviter un replay accidentel
+    if Path(DETECTED_AUDIO).exists():
+        player.play_blocking(DETECTED_AUDIO)
 
 # ======================
 # GLOBAL STATE
@@ -213,8 +228,8 @@ def on_hat_pressed():
 def main():
     cam = init_camera()
     
-    # Init Buttons (Optimisé pour tactile : pas de pull_up, anti-rebond court)
-    touch_button = Button(TOUCH_GPIO, pull_up=False, bounce_time=0.05)
+    # Init Buttons (bouton poussoir GPIO12 : pull_up=True, anti-rebond court)
+    touch_button = Button(TOUCH_GPIO, pull_up=True, bounce_time=0.05)
     hat_button = Button(HAT_BUTTON_GPIO, bounce_time=0.2)
     
     touch_button.when_pressed = on_touch_pressed
