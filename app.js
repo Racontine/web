@@ -303,10 +303,11 @@ function renderLibrary() {
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                     </svg>
                 </button>
-                <button class="download-disc-btn action-download-disc" title="Télécharger le disque">
+                <button class="download-disc-btn action-download-disc" title="Télécharger la disquette">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <circle cx="12" cy="12" r="3"></circle>
+                        <rect x="3" y="3" width="18" height="18" rx="1"></rect>
+                        <rect x="7" y="3" width="10" height="6"></rect>
+                        <rect x="9" y="14" width="6" height="6" rx="1"></rect>
                     </svg>
                 </button>
                 <button class="delete-btn action-delete" title="Supprimer">
@@ -342,7 +343,7 @@ if (libraryList) {
         } else if (e.target.closest('.action-download')) {
             downloadTag(url, name);
         } else if (e.target.closest('.action-download-disc')) {
-            downloadDisc(url, name);
+            downloadDisquette(url, name);
         } else if (e.target.closest('.action-delete')) {
             deleteFile(name, path, sha);
         }
@@ -401,15 +402,13 @@ async function downloadTag(rawUrl, name) {
     });
 }
 
-/* --- DISC DOWNLOAD (PDF) --- */
-async function downloadDisc(rawUrl, name) {
-    showToast("Préparation du PDF... ⏳");
+/* --- DISQUETTE DOWNLOAD (PDF rectangles) --- */
+async function downloadDisquette(rawUrl, name) {
+    showToast("Préparation de la disquette PDF... ⏳");
 
-    // 1. Get final URL (short or raw)
     const existing = ratings[name] || {};
     let finalUrl = (existing.shortUrl && existing.shortUrl.length < 50) ? existing.shortUrl : rawUrl;
 
-    // 2. Generate QR code as Image (using a promise)
     try {
         const qrDataUrl = await QRCode.toDataURL(finalUrl, {
             width: 400,
@@ -424,47 +423,48 @@ async function downloadDisc(rawUrl, name) {
             format: 'a4'
         });
 
-        // VBA Constants and coordinates (adjusted by +9.9mm X, +5.339mm Y for top)
-        const targetWidth = 3.56;
-        const posTopLeft = 8.73; // 7.74 + 0.99
-        const posTopTop = 5.6039; // 5.07 + 0.5339
-        const posBotLeft = 8.73; // 7.74 + 0.99
-        const posBotTop = 20.5315; // 18.3245 + 2.207 (rebaissé de 22.07mm)
+        // Rectangle dimensions: 90mm x 94mm
+        const rectW = 9.0;
+        const rectH = 9.4;
+        const rect1X = 5.02, rect1Y = 6.64;
+        const rect2X = 5.02, rect2Y = 16.44;
 
-        // Background template (disqueQR.png)
-        const bgImg = new Image();
-        bgImg.src = 'disqueQR.png';
+        // QR code centered in rectangle (with margin)
+        const qrSize = 5.5;
+        const qrOffsetX = (rectW - qrSize) / 2;
+        const qrOffsetY = 0.8;
 
-        await new Promise((resolve, reject) => {
-            bgImg.onload = resolve;
-            bgImg.onerror = () => reject(new Error("Impossible de charger disqueQR.png"));
-        });
-
-        // Add background (A4 is 21 x 29.7 cm)
-        doc.addImage(bgImg, 'PNG', 0, 0, 21, 29.7);
-
-        // Add QR codes (Top and Bottom)
-        doc.addImage(qrDataUrl, 'PNG', posTopLeft, posTopTop, targetWidth, targetWidth);
-        doc.addImage(qrDataUrl, 'PNG', posBotLeft, posBotTop, targetWidth, targetWidth);
-
-        // Add media title to the top disc (X=10.51cm, Y=11.02cm based on Illustrator)
+        // Title text
         let displayName = name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
         if (displayName.length > 35) displayName = displayName.substring(0, 32) + "...";
-        doc.setFontSize(11); // Adjust if needed
-        doc.setTextColor(0, 0, 0);
-        doc.text(displayName, 10.51, 11.02, { align: 'center' });
+        const titleOffsetX = rectW / 2;
+        const titleOffsetY = rectH - 0.5;
 
-        // Download
-        doc.save(`${name.split('.')[0]}_disque.pdf`);
-        showToast("Disque PDF téléchargé ! 📀");
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.03);
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+
+        // Rectangle 1 (haut)
+        doc.rect(rect1X, rect1Y, rectW, rectH);
+        doc.addImage(qrDataUrl, 'PNG', rect1X + qrOffsetX, rect1Y + qrOffsetY, qrSize, qrSize);
+        doc.text(displayName, rect1X + titleOffsetX, rect1Y + titleOffsetY, { align: 'center' });
+
+        // Rectangle 2 (bas)
+        doc.rect(rect2X, rect2Y, rectW, rectH);
+        doc.addImage(qrDataUrl, 'PNG', rect2X + qrOffsetX, rect2Y + qrOffsetY, qrSize, qrSize);
+        doc.text(displayName, rect2X + titleOffsetX, rect2Y + titleOffsetY, { align: 'center' });
+
+        doc.save(`${name.split('.')[0]}_disquette.pdf`);
+        showToast("Disquette PDF téléchargée ! 💾");
     } catch (err) {
         console.error(err);
         showToast("Erreur génération PDF : " + err.message);
     }
 }
 
-/* --- BULK DISC DOWNLOAD (MULTI-PAGE PDF) --- */
-async function downloadAllDiscs() {
+/* --- BULK DISQUETTE DOWNLOAD (MULTI-PAGE PDF) --- */
+async function downloadAllDisquettes() {
     if (!availableFiles || availableFiles.length === 0) return;
 
     const term = searchInput ? searchInput.value.toLowerCase() : '';
@@ -493,11 +493,11 @@ async function downloadAllDiscs() {
     });
 
     if (filtered.length === 0) {
-        showToast("Aucun disque à télécharger avec ces filtres.");
+        showToast("Aucune disquette à télécharger avec ces filtres.");
         return;
     }
 
-    showToast(`Préparation du PDF pour ${filtered.length} disque(s)... ⏳`);
+    showToast(`Préparation du PDF pour ${filtered.length} disquette(s)... ⏳`);
 
     try {
         const { jsPDF } = window.jspdf;
@@ -507,28 +507,22 @@ async function downloadAllDiscs() {
             format: 'a4'
         });
 
-        // Constants and coordinates
-        const targetWidth = 3.56;
-        const posTopLeft = 8.73;
-        const posTopTop = 5.6039;
-        const posBotLeft = 8.73;
-        const posBotTop = 20.5315;
-
-        // Background template
-        const bgImg = new Image();
-        bgImg.src = 'disqueQR.png';
-
-        await new Promise((resolve, reject) => {
-            bgImg.onload = resolve;
-            bgImg.onerror = () => reject(new Error("Impossible de charger disqueQR.png"));
-        });
+        // Rectangle dimensions: 90mm x 94mm
+        const rectW = 9.0;
+        const rectH = 9.4;
+        const rect1X = 5.02, rect1Y = 6.64;
+        const rect2X = 5.02, rect2Y = 16.44;
+        const qrSize = 5.5;
+        const qrOffsetX = (rectW - qrSize) / 2;
+        const qrOffsetY = 0.8;
+        const titleOffsetX = rectW / 2;
+        const titleOffsetY = rectH - 0.5;
 
         for (let i = 0; i < filtered.length; i++) {
             const file = filtered[i];
             const metadata = ratings[file.name] || {};
             let finalUrl = (metadata.shortUrl && metadata.shortUrl.length < 50) ? metadata.shortUrl : file.url;
 
-            // Generate QR code
             const qrDataUrl = await QRCode.toDataURL(finalUrl, {
                 width: 400,
                 margin: 2,
@@ -539,23 +533,27 @@ async function downloadAllDiscs() {
                 doc.addPage();
             }
 
-            // Add background
-            doc.addImage(bgImg, 'PNG', 0, 0, 21, 29.7);
-
-            // Add QR codes
-            doc.addImage(qrDataUrl, 'PNG', posTopLeft, posTopTop, targetWidth, targetWidth);
-            doc.addImage(qrDataUrl, 'PNG', posBotLeft, posBotTop, targetWidth, targetWidth);
-
-            // Add media title to top disc
             let displayName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
             if (displayName.length > 35) displayName = displayName.substring(0, 32) + "...";
+
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(0.03);
             doc.setFontSize(11);
             doc.setTextColor(0, 0, 0);
-            doc.text(displayName, 10.51, 11.02, { align: 'center' });
+
+            // Rectangle 1 (haut)
+            doc.rect(rect1X, rect1Y, rectW, rectH);
+            doc.addImage(qrDataUrl, 'PNG', rect1X + qrOffsetX, rect1Y + qrOffsetY, qrSize, qrSize);
+            doc.text(displayName, rect1X + titleOffsetX, rect1Y + titleOffsetY, { align: 'center' });
+
+            // Rectangle 2 (bas)
+            doc.rect(rect2X, rect2Y, rectW, rectH);
+            doc.addImage(qrDataUrl, 'PNG', rect2X + qrOffsetX, rect2Y + qrOffsetY, qrSize, qrSize);
+            doc.text(displayName, rect2X + titleOffsetX, rect2Y + titleOffsetY, { align: 'center' });
         }
 
-        doc.save(`Tous_Les_Disques_${filtered.length}.pdf`);
-        showToast(`PDF de ${filtered.length} disques prêt ! 📀`);
+        doc.save(`Toutes_Les_Disquettes_${filtered.length}.pdf`);
+        showToast(`PDF de ${filtered.length} disquettes prêt ! 💾`);
     } catch (err) {
         console.error(err);
         showToast("Erreur génération PDF groupé : " + err.message);
