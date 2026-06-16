@@ -562,6 +562,101 @@ async function downloadAllDiscs() {
     }
 }
 
+/* --- BULK TAG DOWNLOAD (MULTI-PAGE PDF) --- */
+async function downloadAllTags() {
+    if (!availableFiles || availableFiles.length === 0) return;
+
+    const term = searchInput ? searchInput.value.toLowerCase() : '';
+    const minStars = starFilter ? (parseInt(starFilter.value) || 0) : 0;
+    const typeTerm = typeFilter ? typeFilter.value : 'all';
+
+    const filtered = availableFiles.filter(file => {
+        const metadata = ratings[file.name] || {};
+        const score = typeof metadata === 'number' ? metadata : (metadata.score || 0);
+
+        let type = 'Livre';
+        const parts = file.path.split('/');
+        if (parts.length > 3) {
+            type = parts[2];
+        } else if (typeof metadata === 'object' && metadata.type) {
+            type = metadata.type;
+        } else if (typeof metadata === 'number') {
+            type = 'Livre';
+        }
+
+        const matchesName = file.name.toLowerCase().includes(term);
+        const matchesStars = (minStars === 5) ? (score === 5) : (score >= minStars);
+        const matchesType = (typeTerm === 'all') || (type === typeTerm);
+
+        return matchesName && matchesStars && matchesType;
+    });
+
+    if (filtered.length === 0) {
+        showToast("Aucune étiquette à télécharger avec ces filtres.");
+        return;
+    }
+
+    showToast(`Préparation du PDF pour ${filtered.length} étiquette(s)... ⏳`);
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'cm',
+            format: 'a4'
+        });
+
+        // Grille de 3x4 = 12 étiquettes par page
+        const cols = 3;
+        const rows = 4;
+        const tagsPerPage = cols * rows;
+        const qrSize = 4.5; // cm
+        const marginX = 2.5;
+        const marginY = 2.5;
+        const spacingX = (21 - 2 * marginX - cols * qrSize) / (cols - 1 || 1);
+        const spacingY = (29.7 - 2 * marginY - rows * (qrSize + 1)) / (rows - 1 || 1);
+
+        for (let i = 0; i < filtered.length; i++) {
+            if (i > 0 && i % tagsPerPage === 0) {
+                doc.addPage();
+            }
+
+            const file = filtered[i];
+            const metadata = ratings[file.name] || {};
+            let finalUrl = (metadata.shortUrl && metadata.shortUrl.length < 50) ? metadata.shortUrl : file.url;
+
+            const qrDataUrl = await QRCode.toDataURL(finalUrl, {
+                width: 400,
+                margin: 2,
+                errorCorrectionLevel: 'H'
+            });
+
+            const pageIndex = i % tagsPerPage;
+            const col = pageIndex % cols;
+            const row = Math.floor(pageIndex / cols);
+
+            const x = marginX + col * (qrSize + spacingX);
+            const y = marginY + row * (qrSize + 1 + spacingY);
+
+            // Add QR code
+            doc.addImage(qrDataUrl, 'PNG', x, y, qrSize, qrSize);
+
+            // Add text
+            let displayName = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+            if (displayName.length > 25) displayName = displayName.substring(0, 22) + "...";
+            doc.setFontSize(10);
+            doc.setTextColor(0, 0, 0);
+            doc.text(displayName, x + qrSize/2, y + qrSize + 0.5, { align: 'center' });
+        }
+
+        doc.save(`Tous_Les_etiquettes_${filtered.length}.pdf`);
+        showToast(`PDF de ${filtered.length} étiquettes prêt ! 🏷️`);
+    } catch (err) {
+        console.error(err);
+        showToast("Erreur génération PDF groupé : " + err.message);
+    }
+}
+
 /* --- ACTIONS --- */
 async function rateFile(filename, score) {
     const token = localStorage.getItem('gh_pat');

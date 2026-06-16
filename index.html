@@ -190,12 +190,21 @@
                 <div class="library-header">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
                         <h2>📚 Bibliothèque</h2>
-                        <button class="download-result-btn" style="background: var(--primary); font-size: 0.85rem; padding: 6px 12px; margin: 0; box-shadow: 0 2px 10px rgba(157, 78, 221, 0.3);" onclick="downloadAllDiscs()" title="Télécharger tous les disques affichés en un seul PDF">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-                            </svg>
-                            Tout télécharger
-                        </button>
+                        <div style="display:flex; gap: 8px;">
+                            <button class="download-result-btn" style="background: var(--primary); font-size: 0.85rem; padding: 6px 12px; margin: 0; box-shadow: 0 2px 10px rgba(157, 78, 221, 0.3);" onclick="downloadAllTags()" title="Télécharger toutes les étiquettes en PDF">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                                </svg>
+                                Étiquettes
+                            </button>
+                            <button class="download-result-btn" style="background: var(--primary); font-size: 0.85rem; padding: 6px 12px; margin: 0; box-shadow: 0 2px 10px rgba(157, 78, 221, 0.3);" onclick="downloadAllDiscs()" title="Télécharger tous les disques affichés en un seul PDF">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                Disques
+                            </button>
+                        </div>
                     </div>
                     <div class="search-bar">
                         <input type="text" id="searchInput" placeholder="Rechercher...">
