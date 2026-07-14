@@ -3,8 +3,8 @@
 import time
 import cv2
 import subprocess
-import signal
 import sys
+import socket as _socket
 from pathlib import Path
 from picamera2 import Picamera2
 from pyzbar.pyzbar import decode
@@ -21,6 +21,25 @@ import requests
 BASE_DL_DIR = "/home/alice/media"
 AUDIO_DIR = f"{BASE_DL_DIR}/audio"
 VIDEO_DIR = f"{BASE_DL_DIR}/video"
+
+# Cache local : mémorise short_url → chemin fichier local
+# Permet de rejouer un tag déjà scanné même sans internet
+URL_CACHE_FILE = f"{BASE_DL_DIR}/url_cache.json"
+
+def _load_url_cache() -> dict:
+    try:
+        with open(URL_CACHE_FILE, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_url_cache(cache: dict):
+    try:
+        os.makedirs(BASE_DL_DIR, exist_ok=True)
+        with open(URL_CACHE_FILE, 'w') as f:
+            json.dump(cache, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Impossible de sauvegarder le cache URL : {e}")
 
 def _normalize_url(raw: str) -> str:
     raw = (raw or "").strip()
@@ -42,7 +61,27 @@ def resolve_final_url(raw_url: str) -> str:
     return r.url
 
 def ensure_file(raw_url: str) -> str:
-    final_url = resolve_final_url(raw_url)
+    key = _normalize_url(raw_url)
+
+    # ── ÉTAPE 1 : vérifier le cache local (fonctionne hors-ligne) ──────────
+    url_cache = _load_url_cache()
+    if key in url_cache:
+        cached_path = url_cache[key]
+        if os.path.exists(cached_path):
+            print(f"📁 Cache local → lecture directe : {cached_path}")
+            return cached_path
+        else:
+            # Le fichier a été supprimé, on retire l'entrée périmée
+            print(f"⚠️ Fichier cache introuvable ({cached_path}), re-téléchargement...")
+            del url_cache[key]
+            _save_url_cache(url_cache)
+
+    # ── ÉTAPE 2 : résoudre le short link et télécharger (nécessite internet) ─
+    try:
+        final_url = resolve_final_url(key)
+    except Exception as e:
+        raise RuntimeError(f"Pas de cache et pas d'internet pour : {key} ({e})")
+
     print(f"🔗 URL finale : {final_url}")
 
     filename = urllib.parse.urlparse(final_url).path.split("/")[-1]
@@ -65,6 +104,10 @@ def ensure_file(raw_url: str) -> str:
         print(f"✅ Téléchargé : {local_path}")
     else:
         print(f"📁 Déjà présent : {local_path}")
+
+    # ── ÉTAPE 3 : sauvegarder dans le cache pour les prochaines fois ────────
+    url_cache[key] = local_path
+    _save_url_cache(url_cache)
 
     return local_path
 
@@ -103,88 +146,128 @@ FRAME_SKIP = 3  # Analyze 1 out of every 3 frames
 
 
 # ======================
-# AUDIO PLAYER CLASS (Modifiée pour Replay)
+# AUDIO PLAYER CLASS  (mpv IPC – pause/reprise à la position exacte)
 # ======================
+MPV_SOCKET = "/tmp/alice_mpv.sock"
+
 class AudioPlayer:
     def __init__(self):
         self.process = None
         self.paused = False
         self.current_path = None
-        self.last_path = None  # Mémorise le dernier fichier joué pour le replay
+        self.last_path = None  # Mémorise le dernier fichier joué
 
+    # ------------------------------------------------------------------
+    # Envoi d'une commande JSON à mpv via son socket IPC
+    # ------------------------------------------------------------------
+    def _mpv_cmd(self, *args):
+        """Envoie une commande à mpv via le socket IPC. Retourne True si OK."""
+        try:
+            with _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM) as s:
+                s.settimeout(1.0)
+                s.connect(MPV_SOCKET)
+                msg = json.dumps({"command": list(args)}) + "\n"
+                s.sendall(msg.encode())
+                return True
+        except Exception as e:
+            print(f"⚠️ mpv IPC erreur : {e}")
+            return False
+
+    # ------------------------------------------------------------------
+    # Lecture bloquante (sons courts : welcome, detected)
+    # On utilise mpv directement, sans socket IPC
+    # ------------------------------------------------------------------
     def play_blocking(self, path: str):
         print(f"▶️  Lecture (bloquante) : {path}")
-        cmd = self._get_cmd(path)
-        subprocess.run(cmd, check=False)
+        vol = DEFAULT_VOLUME_PERCENT
+        subprocess.run(
+            ["mpv", "--no-video", f"--volume={vol}", "--really-quiet", path],
+            check=False
+        )
 
+    # ------------------------------------------------------------------
+    # Lancement d'un média avec socket IPC (pause/reprise position exacte)
+    # ------------------------------------------------------------------
     def start(self, path: str):
         self.stop()
         self.current_path = path
-        self.last_path = path # On stocke pour un futur replay
+        self.last_path = path
         self.paused = False
-        
-        print(f"▶️  Lecture : {path}")
-        cmd = self._get_cmd(path)
-        self.process = subprocess.Popen(cmd)
 
+        # Supprime l'ancien socket s'il existe
+        try:
+            os.remove(MPV_SOCKET)
+        except FileNotFoundError:
+            pass
+
+        vol = DEFAULT_VOLUME_PERCENT
+        cmd = [
+            "mpv",
+            "--no-video",
+            f"--volume={vol}",
+            "--really-quiet",
+            f"--input-ipc-server={MPV_SOCKET}",
+            path
+        ]
+        print(f"▶️  Lecture : {path}")
+        self.process = subprocess.Popen(cmd)
+        # Attend que mpv crée le socket (max 2 s)
+        for _ in range(20):
+            if os.path.exists(MPV_SOCKET):
+                break
+            time.sleep(0.1)
+
+    # ------------------------------------------------------------------
+    # Arrêt complet
+    # ------------------------------------------------------------------
     def stop(self):
         if self.process:
             if self.process.poll() is None:
                 try:
-                    self.process.terminate()
+                    self._mpv_cmd("quit")
                     self.process.wait(timeout=2)
                 except Exception:
                     self.process.kill()
             self.process = None
         self.paused = False
         self.current_path = None
+        try:
+            os.remove(MPV_SOCKET)
+        except FileNotFoundError:
+            pass
 
     def is_playing(self):
-        # Retourne True uniquement si le processus est en cours
         return self.process is not None and self.process.poll() is None
 
+    # ------------------------------------------------------------------
+    # Bascule Pause / Reprise
+    # mpv reste vivant en pause → position conservée indéfiniment
+    # ------------------------------------------------------------------
     def toggle_pause(self):
-        # Vérification explicite : si le process n'existe plus ou est fini
+        # Cas 1 : mpv n'est plus en vie (fin normale du fichier)
         if self.process is None or self.process.poll() is not None:
+            self.process = None
+            self.paused = False
             if self.last_path:
-                print(f"🔄 Fin de média détectée. Replay de : {self.last_path}")
+                print(f"🔄 Média terminé. Relecture depuis le début : {self.last_path}")
                 self.start(self.last_path)
             else:
-                print("ℹ️ Aucun média en mémoire pour le replay")
+                print("ℹ️ Aucun média en mémoire")
             return
 
-        # Si le média est encore en cours de lecture
-        try:
-            if not self.paused:
-                self.process.send_signal(signal.SIGSTOP)
-                self.paused = True
-                print("⏸️  Pause")
+        # Cas 2 : mpv actif → on bascule pause/reprise via IPC
+        # mpv conserve la position exacte pendant la pause, quelle que soit la durée
+        ok = self._mpv_cmd("cycle", "pause")
+        if ok:
+            self.paused = not self.paused
+            if self.paused:
+                print("⏸️  Pause (position mémorisée par mpv)")
             else:
-                self.process.send_signal(signal.SIGCONT)
-                self.paused = False
-                print("▶️  Reprise")
-        except Exception as e:
-            print(f"⚠️ Erreur signal: {e}")
-
-    def _get_cmd(self, path: str):
-        if path.lower().endswith(".mp3"):
-            return ["mpg123", "-q", "-f", str(DEFAULT_GAIN), path]
+                print("▶️  Reprise (à la position exacte)")
         else:
-            return ["aplay", "-q", "-f", str(DEFAULT_GAIN), path]
+            print("⚠️ Impossible de contacter mpv – vérifier que mpv est installé")
 
-# ======================
-# BUTTONS HANDLERS
-# ======================
-def on_touch_pressed():
-    # La logique est maintenant centralisée dans player.toggle_pause()
-    player.toggle_pause()
 
-def on_hat_pressed():
-    print("🔄 Bouton HAT → retour scan QR")
-    player.stop()
-    player.last_path = None # On oublie le dernier média pour éviter un replay accidentel
-    if Path(DETECTED_AUDIO).exists():
-        player.play_blocking(DETECTED_AUDIO)
 
 # ======================
 # GLOBAL STATE
@@ -218,6 +301,7 @@ def on_touch_pressed():
 def on_hat_pressed():
     print("🔄 Bouton HAT → retour scan QR")
     player.stop()
+    player.last_path = None  # On oublie le dernier média pour éviter un replay accidentel
     if Path(DETECTED_AUDIO).exists():
         player.play_blocking(DETECTED_AUDIO)
 
@@ -303,9 +387,13 @@ def main():
             if Path(DETECTED_AUDIO).exists():
                player.play_blocking(DETECTED_AUDIO)
 
-            # Download & Play
-            local_path = ensure_file(qr_text)
-            player.start(local_path)
+            # Téléchargement si nécessaire (ou lecture depuis cache local)
+            try:
+                local_path = ensure_file(qr_text)
+                player.start(local_path)
+            except Exception as e:
+                print(f"⚠️ Impossible de charger le média : {e}")
+                print("📵 Tag inconnu et pas d'internet – scan ignoré")
 
     except KeyboardInterrupt:
         print("\n🛑 Arrêt demandé")
